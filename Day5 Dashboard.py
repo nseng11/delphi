@@ -166,7 +166,12 @@ def fetch_live_data():
 
     # Day2/3: Reddit keyword search + per-candidate sentiment
     # fetch_all_posts() uses Reddit's search endpoint (works from cloud IPs, no auth needed)
-    all_posts         = fetch_all_posts()
+    reddit_error = None
+    try:
+        all_posts = fetch_all_posts()
+    except Exception as e:
+        reddit_error = str(e)
+        all_posts = []
     relevant          = [p for p in all_posts if is_relevant(p)]
     sentiment_results = compute_all_candidates_sentiment(relevant)
 
@@ -206,6 +211,7 @@ def fetch_live_data():
         "posts_count":       len(relevant),
         "fetched_at":        datetime.now().strftime("%H:%M:%S"),
         "timestamp":         timestamp,
+        "reddit_error":      reddit_error,
     }
 
 
@@ -402,6 +408,21 @@ def main():
         data = fetch_live_data()
 
     candidates = data["candidates"]
+
+    # ── Debug info (always visible when posts = 0)
+    if data.get("reddit_error"):
+        st.error(f"⚠️ Reddit fetch error: {data['reddit_error']}")
+    elif data.get("posts_fetched", 0) == 0:
+        st.warning("⚠️ Reddit returned 0 posts. Check the debug panel below.")
+
+    with st.expander("🔧 Debug info", expanded=(data.get("posts_fetched", 0) == 0)):
+        st.json({
+            "posts_fetched":  data.get("posts_fetched", 0),
+            "posts_relevant": data.get("posts_count", 0),
+            "reddit_error":   data.get("reddit_error"),
+            "candidates_from_polymarket": len(data.get("market_candidates", [])),
+            "fetched_at":     data.get("fetched_at"),
+        })
 
     # ── Derive summary KPIs
     frontrunner    = candidates[0] if candidates else None
