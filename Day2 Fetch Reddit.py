@@ -1,140 +1,146 @@
 """
 Delphi Oracle - Day 2: Reddit Sentiment Data Fetcher
-Source: Reddit API
+Source: Reddit public search API (no credentials required)
 
-Auth strategy:
-  - Streamlit Cloud: uses OAuth credentials from st.secrets (REDDIT_CLIENT_ID etc.)
-  - Local dev: falls back to public JSON API (no auth needed)
+Strategy:
+  Instead of fetching subreddit feeds (blocked by Reddit on cloud IPs),
+  we search Reddit globally by keyword. This works from Streamlit Cloud
+  without any API credentials and is actually better targeted — we only
+  retrieve posts that explicitly mention our market's topics.
 
-To enable on Streamlit Cloud, add to your app's Secrets:
-    REDDIT_CLIENT_ID     = "your_client_id"
-    REDDIT_CLIENT_SECRET = "your_client_secret"
-    REDDIT_USER_AGENT    = "DelphiOracle/1.0 by YOUR_USERNAME"
-
-Get credentials at: https://www.reddit.com/prefs/apps  (create a "script" app)
+  Search queries are built from the market config's keyword list,
+  batched into groups so we don't exceed URL length limits.
 """
 
-import os
 import requests
-import json
+import time
 from datetime import datetime, timezone
 from active_market import MARKET_CONFIG
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-BASE_HEADERS  = {"User-Agent": "DelphiOracle/1.0 (sentiment research project)"}
-KEYWORDS      = MARKET_CONFIG["keywords"]
-MAX_POSTS_PER_SUB = 50
+HEADERS           = {"User-Agent": "DelphiOracle/1.0 (sentiment research project)"}
+KEYWORDS          = MARKET_CONFIG["keywords"]
+MAX_RESULTS       = 100    # total posts to retrieve per search batch
+KEYWORDS_PER_QUERY = 6    # number of keywords ORed together per API call
+SORT              = "new"  # "new" | "hot" | "relevance" | "top"
+TIME_FILTER       = "week" # "hour" | "day" | "week" | "month" | "year" | "all"
 
-SUBREDDITS_NEW = MARKET_CONFIG["subreddits_new"]
-SUBREDDITS_HOT = MARKET_CONFIG["subreddits_hot"]
-
-
-# ── Auth helpers ───────────────────────────────────────────────────────────────
-
-def _get_oauth_token(client_id: str, client_secret: str, user_agent: str) -> str | None:
-    """Exchange client credentials for a Reddit OAuth bearer token."""
-    try:
-        resp = requests.post(
-            "https://www.reddit.com/api/v1/access_token",
-            auth=(client_id, client_secret),
-            data={"grant_type": "client_credentials"},
-            headers={"User-Agent": user_agent},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return resp.json().get("access_token")
-    except Exception as e:
-        print(f"  ⚠️  OAuth token error: {e}")
-        return None
-
-
-def _get_reddit_credentials():
-    """
-    Try to get Reddit OAuth credentials from:
-      1. Streamlit secrets (st.secrets)
-      2. Environment variables
-    Returns (client_id, client_secret, user_agent) or None if unavailable.
-    """
-    # Try Streamlit secrets first
-    try:
-        import streamlit as st
-        cid    = st.secrets.get("REDDIT_CLIENT_ID")
-        csec   = st.secrets.get("REDDIT_CLIENT_SECRET")
-        agent  = st.secrets.get("REDDIT_USER_AGENT", "DelphiOracle/1.0")
-        if cid and csec:
-            return cid, csec, agent
-    except Exception:
-        pass
-
-    # Fall back to environment variables
-    cid   = os.environ.get("REDDIT_CLIENT_ID")
-    csec  = os.environ.get("REDDIT_CLIENT_SECRET")
-    agent = os.environ.get("REDDIT_USER_AGENT", "DelphiOracle/1.0")
-    if cid and csec:
-        return cid, csec, agent
-
-    return None
+# Keep these for backwards compatibility (Day3/Day5 import them)
+SUBREDDITS_NEW = MARKET_CONFIG.get("subreddits_new", [])
+SUBREDDITS_HOT = MARKET_CONFIG.get("subreddits_hot", [])
 
 
 # ── Fetching ───────────────────────────────────────────────────────────────────
 
-def fetch_subreddit_posts(subreddit: str, limit: int = MAX_POSTS_PER_SUB, sort: str = "new") -> list:
+def _search_reddit(query: str, limit: int = 25, sort: str = SORT,
+                   time_filter: str = TIME_FILTER) -> list:
     """
-    Fetch posts from a subreddit.
-    Uses OAuth API if credentials available, falls back to public JSON API.
+    Call Reddit's global search endpoint with a query string.
+    Returns a list of raw post dicts. No auth required.
     """
-    creds = _get_reddit_credentials()
-
-    if creds:
-        return _fetch_oauth(subreddit, limit, sort, creds)
-    else:
-        return _fetch_public(subreddit, limit, sort)
-
-
-def _fetch_oauth(subreddit: str, limit: int, sort: str, creds: tuple) -> list:
-    """Fetch using Reddit OAuth API (works from cloud servers)."""
-    client_id, client_secret, user_agent = creds
-    token = _get_oauth_token(client_id, client_secret, user_agent)
-    if not token:
-        print(f"  ⚠️  OAuth failed for r/{subreddit}, trying public API...")
-        return _fetch_public(subreddit, limit, sort)
-
-    url = f"https://oauth.reddit.com/r/{subreddit}/{sort}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "User-Agent": user_agent,
+    url = "https://www.reddit.com/search.json"
+    params = {
+        "q":        query,
+        "sort":     sort,
+        "t":        time_filter,
+        "limit":    min(limit, 100),
+        "type":     "link",
     }
     try:
-        print(f"  🔍 Fetching r/{subreddit} (OAuth)...")
-        resp = requests.get(url, headers=headers, params={"limit": limit}, timeout=10)
+        resp = requests.get(url, headers=HEADERS, params=params, timeout=15)
         resp.raise_for_status()
-        data  = resp.json()
-        posts = data.get("data", {}).get("children", [])
-        return [p["data"] for p in posts]
+        children = resp.json().get("data", {}).get("children", [])
+        return [c["data"] for c in children]
     except Exception as e:
-        print(f"  ❌ OAuth fetch error r/{subreddit}: {e}")
+        print(f"  ❌ Search error (query='{query[:40]}...'): {e}")
         return []
 
 
-def _fetch_public(subreddit: str, limit: int, sort: str) -> list:
-    """Fetch using public JSON API (local dev only — blocked by Reddit on cloud IPs)."""
+def fetch_all_posts(keywords: list = None, max_results: int = MAX_RESULTS) -> list:
+    """
+    Search Reddit for all market-relevant posts by batching keywords into OR queries.
+    Deduplicates by post ID.
+
+    Args:
+        keywords:    List of search terms. Defaults to MARKET_CONFIG["keywords"].
+        max_results: Approximate cap on total posts fetched.
+
+    Returns:
+        List of unique post dicts, sorted newest first.
+    """
+    if keywords is None:
+        keywords = KEYWORDS
+
+    seen_ids = set()
+    all_posts = []
+
+    # Batch keywords into OR queries
+    batches = [
+        keywords[i: i + KEYWORDS_PER_QUERY]
+        for i in range(0, len(keywords), KEYWORDS_PER_QUERY)
+    ]
+
+    per_batch = max(10, max_results // max(len(batches), 1))
+
+    for batch in batches:
+        query = " OR ".join(f'"{kw}"' for kw in batch)
+        print(f"  🔍 Searching: {query[:70]}...")
+        posts = _search_reddit(query, limit=per_batch)
+        for post in posts:
+            pid = post.get("id")
+            if pid and pid not in seen_ids:
+                seen_ids.add(pid)
+                all_posts.append(post)
+        # Small delay to be a polite API citizen
+        time.sleep(0.5)
+
+    # Sort newest first
+    all_posts.sort(key=lambda p: p.get("created_utc", 0), reverse=True)
+    return all_posts
+
+
+def fetch_subreddit_posts(subreddit: str, limit: int = 25, sort: str = "new") -> list:
+    """
+    Compatibility shim — Day3/Day5 call this per-subreddit.
+    On Streamlit Cloud we redirect to keyword search instead of subreddit feeds.
+    Locally the subreddit feed usually works, so we try it first.
+    """
     url = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
     try:
-        print(f"  🔍 Fetching r/{subreddit} (public API)...")
-        resp = requests.get(url, headers=BASE_HEADERS, params={"limit": limit}, timeout=10)
+        resp = requests.get(url, headers=HEADERS, params={"limit": limit}, timeout=10)
+        if resp.status_code == 200:
+            children = resp.json().get("data", {}).get("children", [])
+            posts = [c["data"] for c in children]
+            if posts:
+                print(f"  🔍 Fetched r/{subreddit} ({len(posts)} posts)")
+                return posts
+        # 403 / empty = cloud IP blocked; fall through to search
+        print(f"  ⚠️  r/{subreddit} feed blocked or empty — using search fallback")
+    except Exception:
+        print(f"  ⚠️  r/{subreddit} feed error — using search fallback")
+
+    # Fallback: search within this subreddit
+    query = " OR ".join(f'"{kw}"' for kw in KEYWORDS[:KEYWORDS_PER_QUERY])
+    url_search = f"https://www.reddit.com/r/{subreddit}/search.json"
+    try:
+        resp = requests.get(url_search, headers=HEADERS,
+                            params={"q": query, "sort": sort, "limit": limit,
+                                    "restrict_sr": "true", "t": TIME_FILTER},
+                            timeout=10)
         resp.raise_for_status()
-        data  = resp.json()
-        posts = data.get("data", {}).get("children", [])
-        return [p["data"] for p in posts]
-    except requests.exceptions.RequestException as e:
-        print(f"  ❌ Error fetching r/{subreddit}: {e}")
+        children = resp.json().get("data", {}).get("children", [])
+        posts = [c["data"] for c in children]
+        print(f"  🔍 Searched r/{subreddit} ({len(posts)} posts)")
+        return posts
+    except Exception as e:
+        print(f"  ❌ Search fallback error for r/{subreddit}: {e}")
         return []
 
 
 def is_relevant(post: dict) -> bool:
-    """Return True if the post title or selftext contains a keyword."""
+    """Return True if the post title or selftext contains a market keyword."""
     text = (post.get("title", "") + " " + post.get("selftext", "")).lower()
     return any(kw.lower() in text for kw in KEYWORDS)
 
@@ -142,13 +148,14 @@ def is_relevant(post: dict) -> bool:
 # ── Display ────────────────────────────────────────────────────────────────────
 
 def display_post(rank: int, post: dict) -> None:
-    """Pretty-print a single post."""
     title     = post.get("title", "No title")
     subreddit = post.get("subreddit_name_prefixed", "r/?")
     score     = post.get("score", 0)
     comments  = post.get("num_comments", 0)
     url       = "https://reddit.com" + post.get("permalink", "")
-    created   = datetime.fromtimestamp(post.get("created_utc", 0), tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+    created   = datetime.fromtimestamp(
+        post.get("created_utc", 0), tz=timezone.utc
+    ).strftime("%Y-%m-%d %H:%M")
 
     print(f"\n  {rank:2}. [{subreddit}]")
     print(f"      📰 {title}")
@@ -157,23 +164,20 @@ def display_post(rank: int, post: dict) -> None:
 
 
 def display_results(relevant_posts: list) -> None:
-    """Display all relevant posts with a summary."""
     print("\n" + "=" * 70)
     print("📊 DELPHI ORACLE - REDDIT DATA FEED")
     print("=" * 70)
-    print(f"🕐 Retrieved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 Topic: {MARKET_CONFIG['name']}")
-    all_subs = SUBREDDITS_NEW + SUBREDDITS_HOT
-    print(f"📡 Sources: {', '.join(['r/' + s for s in all_subs])}")
+    print(f"🕐 Retrieved : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"🎯 Topic     : {MARKET_CONFIG['name']}")
+    print(f"🔑 Keywords  : {len(KEYWORDS)} terms across {len(KEYWORDS)//KEYWORDS_PER_QUERY +1} search batches")
     print("=" * 70)
 
     if not relevant_posts:
-        print("\n⚠️  No relevant posts found. Try expanding KEYWORDS or SUBREDDITS.")
+        print("\n⚠️  No relevant posts found. Try expanding KEYWORDS or TIME_FILTER.")
         return
 
     print(f"\n✅ Found {len(relevant_posts)} relevant posts:\n")
     print("-" * 70)
-
     for rank, post in enumerate(relevant_posts, 1):
         display_post(rank, post)
 
@@ -196,27 +200,15 @@ def display_results(relevant_posts: list) -> None:
 def main():
     print("\n" + "🔮" * 35)
     print("        DELPHI ORACLE - REDDIT DATA FETCHER")
-    creds = _get_reddit_credentials()
-    print(f"            ({'OAuth' if creds else 'Public API - may be blocked on cloud'})")
+    print("            (Keyword Search · No Auth Required)")
     print("🔮" * 35 + "\n")
 
-    all_posts      = []
-    relevant_posts = []
+    print("📡 Searching Reddit by keyword...\n")
+    all_posts = fetch_all_posts()
+    print(f"\n📥 Total unique posts fetched : {len(all_posts)}")
 
-    print("📡 Scanning subreddits...\n")
-    for subreddit in SUBREDDITS_NEW:
-        posts = fetch_subreddit_posts(subreddit, sort="new")
-        all_posts.extend(posts)
-    for subreddit in SUBREDDITS_HOT:
-        posts = fetch_subreddit_posts(subreddit, sort="hot")
-        all_posts.extend(posts)
-
-    print(f"\n📥 Total posts fetched : {len(all_posts)}")
-
-    for post in all_posts:
-        if is_relevant(post):
-            relevant_posts.append(post)
-
+    # All posts from search are already relevant, but filter to be safe
+    relevant_posts = [p for p in all_posts if is_relevant(p)]
     relevant_posts.sort(key=lambda p: p.get("score", 0), reverse=True)
 
     display_results(relevant_posts)

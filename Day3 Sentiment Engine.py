@@ -33,6 +33,7 @@ _base = os.path.dirname(os.path.abspath(__file__))
 _day2 = _import_file("day2", os.path.join(_base, "Day2 Fetch Reddit.py"))
 
 fetch_subreddit_posts = _day2.fetch_subreddit_posts
+fetch_all_posts       = _day2.fetch_all_posts
 is_relevant           = _day2.is_relevant
 SUBREDDITS_NEW        = _day2.SUBREDDITS_NEW
 SUBREDDITS_HOT        = _day2.SUBREDDITS_HOT

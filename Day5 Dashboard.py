@@ -40,13 +40,11 @@ _day4 = _import_file("day4", os.path.join(_base, "Day4 Oracle Logic.py"))
 
 fetch_market_by_slug             = _day1.fetch_market_by_slug
 get_candidates                   = _day1.get_candidates
-fetch_subreddit_posts            = _day3.fetch_subreddit_posts
+fetch_all_posts                  = _day3.fetch_all_posts
 is_relevant                      = _day3.is_relevant
 compute_all_candidates_sentiment = _day3.compute_all_candidates_sentiment
 generate_signal                  = _day4.generate_signal
 log_predictions                  = _day4.log_predictions
-SUBREDDITS_NEW                   = _day3.SUBREDDITS_NEW
-SUBREDDITS_HOT                   = _day3.SUBREDDITS_HOT
 
 SENTIMENT_CSV   = os.path.join(_base, "data", f"{MARKET_CONFIG['data_prefix']}_sentiment.csv")
 PREDICTIONS_CSV = os.path.join(_base, "data", f"{MARKET_CONFIG['data_prefix']}_predictions.csv")
@@ -167,13 +165,9 @@ def fetch_live_data():
         for c in market_candidates
     }
 
-    # Day2/3: Reddit + per-candidate sentiment
-    all_posts = []
-    for sub in SUBREDDITS_NEW:
-        all_posts.extend(fetch_subreddit_posts(sub, sort="new"))
-    for sub in SUBREDDITS_HOT:
-        all_posts.extend(fetch_subreddit_posts(sub, sort="hot"))
-
+    # Day2/3: Reddit keyword search + per-candidate sentiment
+    # fetch_all_posts() uses Reddit's search endpoint (works from cloud IPs, no auth needed)
+    all_posts         = fetch_all_posts()
     relevant          = [p for p in all_posts if is_relevant(p)]
     sentiment_results = compute_all_candidates_sentiment(relevant)
 
