@@ -15,7 +15,6 @@ Features:
 """
 
 import os
-import time
 import importlib.util
 import pandas as pd
 import plotly.graph_objects as go
@@ -145,7 +144,7 @@ st.markdown("""
 
 # ── Data fetching (cached for 60s) ───────────────────────────────────────────────
 
-@st.cache_data(ttl=REFRESH_SECONDS)
+@st.cache_data(ttl=REFRESH_SECONDS, show_spinner=False)
 def fetch_live_data():
     """Fetch all live data and generate per-candidate signals. Cached for 60s."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -203,6 +202,7 @@ def fetch_live_data():
     return {
         "candidates":        candidate_signals,
         "market_candidates": market_candidates,
+        "posts_fetched":     len(all_posts),
         "posts_count":       len(relevant),
         "fetched_at":        datetime.now().strftime("%H:%M:%S"),
         "timestamp":         timestamp,
@@ -445,10 +445,12 @@ def main():
         st.markdown(html, unsafe_allow_html=True)
 
     with col4:
+        fetched = data.get("posts_fetched", 0)
+        sub_txt = f"{fetched} fetched · {total_posts} relevant" if fetched != total_posts else "Reddit posts this cycle"
         html = _kpi_card(
             "Posts Analyzed",
             str(total_posts),
-            sub="Reddit posts this cycle",
+            sub=sub_txt,
             timestamp=f"Updated {data['fetched_at']}",
         )
         st.markdown(html, unsafe_allow_html=True)
@@ -553,13 +555,16 @@ def main():
 
     # ── Footer / refresh
     st.divider()
+    foot_left, foot_mid, foot_right = st.columns([3, 1, 3])
+    with foot_mid:
+        if st.button("🔄 Refresh now", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
     st.markdown(
-        f'<div class="refresh-bar">🔄 Auto-refreshing every {REFRESH_SECONDS}s · '
+        f'<div class="refresh-bar">Cache refreshes every {REFRESH_SECONDS}s · '
         f'Last fetch: {data["fetched_at"]}</div>',
         unsafe_allow_html=True,
     )
-    time.sleep(REFRESH_SECONDS)
-    st.rerun()
 
 
 if __name__ == "__main__":
