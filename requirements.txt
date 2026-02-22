@@ -1,0 +1,9 @@
+# Delphi Oracle - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+requests>=2.31.0
+vaderSentiment>=3.3.2
+pandas>=2.0.0
+plotly>=5.0.0
+streamlit>=1.40.0
+numpy>=1.24.0

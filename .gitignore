@@ -1,0 +1,45 @@
+# ── Python ──────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ─────────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+
+# ── Secrets & credentials (NEVER commit these) ───────────────────────────────────
+.env
+.env.*
+secrets.py
+secrets.json
+credentials.json
+*.key
+*.pem
+config_local.py
+
+# ── Data files (local logs — too large / personal for public repo) ───────────────
+data/*.csv
+data/*.json
+
+# ── Streamlit local config ────────────────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── OS & editor clutter ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
