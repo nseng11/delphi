@@ -1,18 +1,20 @@
 """
-Delphi Oracle - Day 2: Reddit Sentiment Data Fetcher
-Source: Reddit public search API (no credentials required)
+Delphi Oracle - Day 2: News & Social Sentiment Data Fetcher
+Source: Google News RSS (no credentials, no IP restrictions, free)
 
 Strategy:
-  Instead of fetching subreddit feeds (blocked by Reddit on cloud IPs),
-  we search Reddit globally by keyword. This works from Streamlit Cloud
-  without any API credentials and is actually better targeted — we only
-  retrieve posts that explicitly mention our market's topics.
+  Google News RSS aggregates articles from across the web — tech blogs,
+  news sites, Reddit threads that made news, etc. It works from any IP
+  including Streamlit Cloud, requires zero authentication, and returns
+  high-quality signal for AI model discourse.
 
-  Search queries are built from the market config's keyword list,
-  batched into groups so we don't exceed URL length limits.
+  We search one query per candidate using their keyword list, then
+  aggregate and deduplicate by URL.
 """
 
 import requests
+import xml.etree.ElementTree as ET
+import urllib.parse
 import time
 from datetime import datetime, timezone
 from active_market import MARKET_CONFIG
@@ -20,81 +22,107 @@ from active_market import MARKET_CONFIG
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-HEADERS           = {"User-Agent": "DelphiOracle/1.0 (sentiment research project)"}
-KEYWORDS          = MARKET_CONFIG["keywords"]
-MAX_RESULTS       = 100    # total posts to retrieve per search batch
-KEYWORDS_PER_QUERY = 6    # number of keywords ORed together per API call
-SORT              = "new"  # "new" | "hot" | "relevance" | "top"
-TIME_FILTER       = "week" # "hour" | "day" | "week" | "month" | "year" | "all"
+HEADERS        = {"User-Agent": "DelphiOracle/1.0 (sentiment research project)"}
+KEYWORDS       = MARKET_CONFIG["keywords"]
+CANDIDATES     = MARKET_CONFIG.get("candidates", {})
+MAX_PER_QUERY  = 20    # articles per keyword batch (Google News max is ~100)
+TIME_WINDOW    = "7d"  # Google News time filter: 1h, 1d, 7d, 30d
 
-# Keep these for backwards compatibility (Day3/Day5 import them)
+# Keep these for backwards compatibility (Day3 imports them)
 SUBREDDITS_NEW = MARKET_CONFIG.get("subreddits_new", [])
 SUBREDDITS_HOT = MARKET_CONFIG.get("subreddits_hot", [])
 
 
 # ── Fetching ───────────────────────────────────────────────────────────────────
 
-def _search_reddit(query: str, limit: int = 25, sort: str = SORT,
-                   time_filter: str = TIME_FILTER) -> list:
+def _fetch_google_news_rss(query: str, max_results: int = MAX_PER_QUERY) -> list:
     """
-    Call Reddit's global search endpoint with a query string.
-    Returns a list of raw post dicts. No auth required.
+    Fetch articles from Google News RSS for a given query string.
+    Returns list of dicts with keys matching Reddit post format so
+    downstream Day3/Day4 code works unchanged.
     """
-    url = "https://www.reddit.com/search.json"
-    params = {
-        "q":        query,
-        "sort":     sort,
-        "t":        time_filter,
-        "limit":    min(limit, 100),
-        "type":     "link",
-    }
+    encoded = urllib.parse.quote(query)
+    url = f"https://news.google.com/rss/search?q={encoded}+when:{TIME_WINDOW}&hl=en-US&gl=US&ceid=US:en"
+
     try:
-        resp = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        resp = requests.get(url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
-        children = resp.json().get("data", {}).get("children", [])
-        return [c["data"] for c in children]
+        root  = ET.fromstring(resp.content)
+        items = root.findall(".//item")[:max_results]
+
+        posts = []
+        for item in items:
+            title      = item.find("title").text   if item.find("title")   is not None else ""
+            link       = item.find("link").text     if item.find("link")    is not None else ""
+            desc       = item.find("description")
+            selftext   = desc.text                  if desc is not None else ""
+            pub_date   = item.find("pubDate")
+            source_el  = item.find("source")
+            source     = source_el.text             if source_el is not None else "News"
+
+            # Parse pubDate → unix timestamp
+            created_utc = 0
+            if pub_date is not None and pub_date.text:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    created_utc = int(parsedate_to_datetime(pub_date.text).timestamp())
+                except Exception:
+                    pass
+
+            # Normalise to Reddit-like dict so Day3 VADER scoring works unchanged
+            posts.append({
+                "id":                        link,         # unique identifier
+                "title":                     title,
+                "selftext":                  selftext,     # article snippet / description
+                "score":                     10,           # synthetic upvote weight
+                "num_comments":              0,
+                "subreddit_name_prefixed":   f"News/{source}",
+                "permalink":                 link,
+                "created_utc":               created_utc,
+                "url":                       link,
+            })
+        return posts
+
     except Exception as e:
-        print(f"  ❌ Search error (query='{query[:40]}...'): {e}")
+        print(f"  ❌ Google News error (query='{query[:50]}'): {e}")
         return []
 
 
-def fetch_all_posts(keywords: list = None, max_results: int = MAX_RESULTS) -> list:
+def fetch_all_posts(keywords: list = None, max_results: int = 100) -> list:
     """
-    Search Reddit for all market-relevant posts by batching keywords into OR queries.
-    Deduplicates by post ID.
-
-    Args:
-        keywords:    List of search terms. Defaults to MARKET_CONFIG["keywords"].
-        max_results: Approximate cap on total posts fetched.
-
-    Returns:
-        List of unique post dicts, sorted newest first.
+    Fetch news articles for all market keywords using Google News RSS.
+    Deduplicates by URL. Returns list of post-like dicts.
     """
     if keywords is None:
         keywords = KEYWORDS
 
-    seen_ids = set()
+    seen_urls = set()
     all_posts = []
 
-    # Batch keywords into OR queries
-    batches = [
-        keywords[i: i + KEYWORDS_PER_QUERY]
-        for i in range(0, len(keywords), KEYWORDS_PER_QUERY)
-    ]
-
-    per_batch = max(10, max_results // max(len(batches), 1))
-
-    for batch in batches:
-        query = " OR ".join(f'"{kw}"' for kw in batch)
-        print(f"  🔍 Searching: {query[:70]}...")
-        posts = _search_reddit(query, limit=per_batch)
+    # Build one query per candidate from their specific keywords
+    for candidate, cand_keywords in CANDIDATES.items():
+        query = " OR ".join(f'"{kw}"' for kw in cand_keywords[:4])
+        print(f"  🔍 Searching news: {candidate} ...")
+        posts = _fetch_google_news_rss(query, max_results=MAX_PER_QUERY)
         for post in posts:
-            pid = post.get("id")
-            if pid and pid not in seen_ids:
-                seen_ids.add(pid)
+            url = post.get("id", "")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
                 all_posts.append(post)
-        # Small delay to be a polite API citizen
-        time.sleep(0.5)
+        time.sleep(0.3)   # polite delay
+
+    # Also search broad market terms
+    broad_query = " OR ".join(f'"{kw}"' for kw in [
+        "best ai model", "ai model comparison", "llm leaderboard",
+        "chatbot arena", "frontier model"
+    ])
+    print(f"  🔍 Searching news: broad market terms ...")
+    broad_posts = _fetch_google_news_rss(broad_query, max_results=MAX_PER_QUERY)
+    for post in broad_posts:
+        url = post.get("id", "")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            all_posts.append(post)
 
     # Sort newest first
     all_posts.sort(key=lambda p: p.get("created_utc", 0), reverse=True)
@@ -103,44 +131,16 @@ def fetch_all_posts(keywords: list = None, max_results: int = MAX_RESULTS) -> li
 
 def fetch_subreddit_posts(subreddit: str, limit: int = 25, sort: str = "new") -> list:
     """
-    Compatibility shim — Day3/Day5 call this per-subreddit.
-    On Streamlit Cloud we redirect to keyword search instead of subreddit feeds.
-    Locally the subreddit feed usually works, so we try it first.
+    Compatibility shim — Day3 imports this. Redirects to Google News search
+    scoped to the subreddit name as a query term.
     """
-    url = f"https://www.reddit.com/r/{subreddit}/{sort}.json"
-    try:
-        resp = requests.get(url, headers=HEADERS, params={"limit": limit}, timeout=10)
-        if resp.status_code == 200:
-            children = resp.json().get("data", {}).get("children", [])
-            posts = [c["data"] for c in children]
-            if posts:
-                print(f"  🔍 Fetched r/{subreddit} ({len(posts)} posts)")
-                return posts
-        # 403 / empty = cloud IP blocked; fall through to search
-        print(f"  ⚠️  r/{subreddit} feed blocked or empty — using search fallback")
-    except Exception:
-        print(f"  ⚠️  r/{subreddit} feed error — using search fallback")
-
-    # Fallback: search within this subreddit
-    query = " OR ".join(f'"{kw}"' for kw in KEYWORDS[:KEYWORDS_PER_QUERY])
-    url_search = f"https://www.reddit.com/r/{subreddit}/search.json"
-    try:
-        resp = requests.get(url_search, headers=HEADERS,
-                            params={"q": query, "sort": sort, "limit": limit,
-                                    "restrict_sr": "true", "t": TIME_FILTER},
-                            timeout=10)
-        resp.raise_for_status()
-        children = resp.json().get("data", {}).get("children", [])
-        posts = [c["data"] for c in children]
-        print(f"  🔍 Searched r/{subreddit} ({len(posts)} posts)")
-        return posts
-    except Exception as e:
-        print(f"  ❌ Search fallback error for r/{subreddit}: {e}")
-        return []
+    query = f"site:reddit.com/r/{subreddit} ({' OR '.join(KEYWORDS[:4])})"
+    print(f"  🔍 Searching news for r/{subreddit} content...")
+    return _fetch_google_news_rss(query, max_results=limit)
 
 
 def is_relevant(post: dict) -> bool:
-    """Return True if the post title or selftext contains a market keyword."""
+    """Return True if the article title or description contains a market keyword."""
     text = (post.get("title", "") + " " + post.get("selftext", "")).lower()
     return any(kw.lower() in text for kw in KEYWORDS)
 
@@ -148,50 +148,41 @@ def is_relevant(post: dict) -> bool:
 # ── Display ────────────────────────────────────────────────────────────────────
 
 def display_post(rank: int, post: dict) -> None:
-    title     = post.get("title", "No title")
-    subreddit = post.get("subreddit_name_prefixed", "r/?")
-    score     = post.get("score", 0)
-    comments  = post.get("num_comments", 0)
-    url       = "https://reddit.com" + post.get("permalink", "")
-    created   = datetime.fromtimestamp(
+    title   = post.get("title", "No title")
+    source  = post.get("subreddit_name_prefixed", "News/?")
+    score   = post.get("score", 0)
+    url     = post.get("url", "")
+    created = datetime.fromtimestamp(
         post.get("created_utc", 0), tz=timezone.utc
-    ).strftime("%Y-%m-%d %H:%M")
+    ).strftime("%Y-%m-%d %H:%M") if post.get("created_utc") else "Unknown"
 
-    print(f"\n  {rank:2}. [{subreddit}]")
+    print(f"\n  {rank:2}. [{source}]")
     print(f"      📰 {title}")
-    print(f"      ⬆ {score} points  |  💬 {comments} comments  |  🕐 {created} UTC")
-    print(f"      🔗 {url}")
+    print(f"      🕐 {created} UTC")
+    print(f"      🔗 {url[:90]}")
 
 
 def display_results(relevant_posts: list) -> None:
     print("\n" + "=" * 70)
-    print("📊 DELPHI ORACLE - REDDIT DATA FEED")
+    print("📊 DELPHI ORACLE - NEWS DATA FEED")
     print("=" * 70)
     print(f"🕐 Retrieved : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🎯 Topic     : {MARKET_CONFIG['name']}")
-    print(f"🔑 Keywords  : {len(KEYWORDS)} terms across {len(KEYWORDS)//KEYWORDS_PER_QUERY +1} search batches")
+    print(f"📡 Source    : Google News RSS (last {TIME_WINDOW})")
     print("=" * 70)
 
     if not relevant_posts:
-        print("\n⚠️  No relevant posts found. Try expanding KEYWORDS or TIME_FILTER.")
+        print("\n⚠️  No relevant articles found.")
         return
 
-    print(f"\n✅ Found {len(relevant_posts)} relevant posts:\n")
+    print(f"\n✅ Found {len(relevant_posts)} relevant articles:\n")
     print("-" * 70)
     for rank, post in enumerate(relevant_posts, 1):
         display_post(rank, post)
 
-    total_score    = sum(p.get("score", 0) for p in relevant_posts)
-    total_comments = sum(p.get("num_comments", 0) for p in relevant_posts)
-    top_post       = max(relevant_posts, key=lambda p: p.get("score", 0))
-
     print("\n" + "=" * 70)
     print("📊 SUMMARY:")
-    print(f"   • Relevant posts found : {len(relevant_posts)}")
-    print(f"   • Total upvotes        : {total_score:,}")
-    print(f"   • Total comments       : {total_comments:,}")
-    print(f"   • Most upvoted post    : {top_post.get('title', '')[:60]}...")
-    print(f"   • Top post score       : {top_post.get('score', 0):,} upvotes")
+    print(f"   • Relevant articles found : {len(relevant_posts)}")
     print()
 
 
@@ -199,20 +190,19 @@ def display_results(relevant_posts: list) -> None:
 
 def main():
     print("\n" + "🔮" * 35)
-    print("        DELPHI ORACLE - REDDIT DATA FETCHER")
-    print("            (Keyword Search · No Auth Required)")
+    print("        DELPHI ORACLE - NEWS DATA FETCHER")
+    print("            (Google News RSS · No Auth Required)")
     print("🔮" * 35 + "\n")
 
-    print("📡 Searching Reddit by keyword...\n")
+    print("📡 Searching Google News by candidate...\n")
     all_posts = fetch_all_posts()
-    print(f"\n📥 Total unique posts fetched : {len(all_posts)}")
+    print(f"\n📥 Total unique articles fetched : {len(all_posts)}")
 
-    # All posts from search are already relevant, but filter to be safe
     relevant_posts = [p for p in all_posts if is_relevant(p)]
-    relevant_posts.sort(key=lambda p: p.get("score", 0), reverse=True)
+    relevant_posts.sort(key=lambda p: p.get("created_utc", 0), reverse=True)
 
     display_results(relevant_posts)
-    print("✅ Reddit fetch complete!\n")
+    print("✅ News fetch complete!\n")
 
 
 if __name__ == "__main__":
