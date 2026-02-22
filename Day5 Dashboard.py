@@ -241,14 +241,22 @@ _CHART_LAYOUT = dict(
 
 
 def make_odds_bar(candidates: list) -> go.Figure:
-    """Horizontal bar chart of market odds with volume annotation."""
+    """Horizontal bar chart of market odds with buy prices and volume."""
     shown  = [c for c in candidates if c.get("volume", 0) >= MARKET_CONFIG.get("min_volume", 0)]
     names  = [c["name"] for c in shown]
     probs  = [c["price"] * 100 for c in shown]
     colors = ["#7B2FBE" if i == 0 else "#A78BFA" if i == 1 else "#C4B5FD"
               for i in range(len(names))]
-    text   = [f"{p:.1f}%  (Yes ${c['buy_yes']:.3f} / No ${c['buy_no']:.3f})"
-              for p, c in zip(probs, shown)]
+
+    def _vol(v):
+        if v >= 1_000_000: return f"${v/1_000_000:.1f}M vol"
+        if v >= 1_000:     return f"${v/1_000:.1f}K vol"
+        return f"${v:.0f} vol"
+
+    text = [
+        f"{p:.1f}%  ·  Yes ${c['buy_yes']:.3f} / No ${c['buy_no']:.3f}  ·  {_vol(c.get('volume', 0))}"
+        for p, c in zip(probs, shown)
+    ]
 
     fig = go.Figure(go.Bar(
         x=probs, y=names, orientation="h",
@@ -258,8 +266,8 @@ def make_odds_bar(candidates: list) -> go.Figure:
     ))
     fig.update_layout(
         **_CHART_LAYOUT,
-        title=dict(text="Live Polymarket Odds  (buy prices shown)", font=dict(size=13, color="#6B7280"), x=0),
-        xaxis=dict(range=[0, 115], ticksuffix="%", gridcolor="#E9EAEC",
+        title=dict(text="Live Polymarket Odds  (buy prices & volume shown)", font=dict(size=13, color="#6B7280"), x=0),
+        xaxis=dict(range=[0, 130], ticksuffix="%", gridcolor="#E9EAEC",
                    showline=False, tickfont=dict(color="#9CA3AF")),
         yaxis=dict(autorange="reversed", showgrid=False, tickfont=dict(color="#374151", size=12)),
         height=max(240, len(shown) * 52),
@@ -288,9 +296,17 @@ def make_sentiment_table(candidates: list) -> pd.DataFrame:
 
 
 def make_history_chart(sentiment_df: pd.DataFrame, predictions_df: pd.DataFrame,
-                       candidate: str = None) -> go.Figure:
-    """Sentiment + price history for a specific candidate (or first available)."""
+                       candidate: str = None, hours: int = None) -> go.Figure:
+    """Sentiment + price history for a specific candidate, optionally filtered by time range."""
     fig = go.Figure()
+
+    # Apply time range filter
+    if hours is not None:
+        cutoff = pd.Timestamp.now() - pd.Timedelta(hours=hours)
+        if not sentiment_df.empty:
+            sentiment_df = sentiment_df[sentiment_df["timestamp"] >= cutoff].copy()
+        if not predictions_df.empty:
+            predictions_df = predictions_df[predictions_df["timestamp"] >= cutoff].copy()
 
     if not sentiment_df.empty and "candidate" in sentiment_df.columns:
         cands = sentiment_df["candidate"].unique().tolist()
@@ -479,7 +495,7 @@ def main():
                 hide_index=True,
             )
 
-    # ── Row 3: Historical chart (candidate selector)
+    # ── Row 3: Historical chart (candidate selector + time range)
     st.markdown(_section_title("Historical Trends"), unsafe_allow_html=True)
     sentiment_df   = load_sentiment_history()
     predictions_df = load_prediction_history()
@@ -491,11 +507,23 @@ def main():
         if not predictions_df.empty and "candidate" in predictions_df.columns:
             candidate_names = sorted(predictions_df["candidate"].unique().tolist())
 
-        selected = None
-        if candidate_names:
-            selected = st.selectbox("View history for:", candidate_names, index=0)
+        ctrl_left, ctrl_right = st.columns([2, 3], gap="medium")
 
-        fig = make_history_chart(sentiment_df, predictions_df, candidate=selected)
+        with ctrl_left:
+            selected = None
+            if candidate_names:
+                selected = st.selectbox("Candidate:", candidate_names, index=0)
+
+        with ctrl_right:
+            TIME_RANGES = {"1H": 1, "6H": 6, "1D": 24, "1W": 168, "ALL": None}
+            range_label = st.radio(
+                "Time range:", list(TIME_RANGES.keys()),
+                index=4, horizontal=True, label_visibility="collapsed"
+            )
+            selected_hours = TIME_RANGES[range_label]
+
+        fig = make_history_chart(sentiment_df, predictions_df,
+                                 candidate=selected, hours=selected_hours)
         st.plotly_chart(fig, use_container_width=True)
 
     # ── Row 4: Prediction log
