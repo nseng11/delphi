@@ -86,7 +86,7 @@ Delphi/
 │   ├── best_ai_model_march_2026_sentiment.csv    ← per-candidate sentiment history
 │   └── best_ai_model_march_2026_predictions.csv  ← oracle signal history
 ├── Day1 Fetch Polymarket.py       ✅ complete
-├── Day2 Fetch Reddit.py           ✅ complete (Google News RSS fetcher)
+├── Day2 Fetch News.py             ✅ complete (Google News RSS fetcher)
 ├── Day3 Sentiment Engine.py       ✅ complete (per-candidate)
 ├── Day4 Oracle Logic.py           ✅ complete (BUY YES / BUY NO / HOLD per candidate)
 ├── Day5 Dashboard.py              ✅ complete (Streamlit)
@@ -106,7 +106,7 @@ Delphi/
 **Completed tasks:**
 - [x] Set up Python 3.14 development environment
 - [x] `Day1 Fetch Polymarket.py` — fetches live odds, buy YES/NO prices, and volume via Polymarket Gamma API
-- [x] `Day2 Fetch Reddit.py` — fetches relevant news articles via Google News RSS (per-candidate keyword queries; Reddit blocked on cloud IPs)
+- [x] `Day2 Fetch News.py` — fetches relevant news articles via Google News RSS (per-candidate keyword queries; Reddit blocked on cloud IPs)
 - [x] Both scripts tested and verified producing live data
 - [x] Refactored to flexible market config system (`active_market.py` + `markets/` directory)
 - [x] Switched active market from Oscars to **Best AI Model — End of March 2026**

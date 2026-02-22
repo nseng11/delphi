@@ -30,7 +30,7 @@ def _import_file(name, path):
     return mod
 
 _base = os.path.dirname(os.path.abspath(__file__))
-_day2 = _import_file("day2", os.path.join(_base, "Day2 Fetch Reddit.py"))
+_day2 = _import_file("day2", os.path.join(_base, "Day2 Fetch News.py"))
 
 fetch_subreddit_posts = _day2.fetch_subreddit_posts
 fetch_all_posts       = _day2.fetch_all_posts

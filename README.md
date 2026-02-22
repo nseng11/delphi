@@ -98,7 +98,7 @@ The dashboard opens automatically at **http://localhost:8501**
 | Script | What it does | Run command |
 |---|---|---|
 | `Day1 Fetch Polymarket.py` | Fetches live odds, buy YES/NO prices, and volume from Polymarket | `python "Day1 Fetch Polymarket.py"` |
-| `Day2 Fetch Reddit.py` | Fetches relevant news articles via Google News RSS (per candidate) | `python "Day2 Fetch Reddit.py"` |
+| `Day2 Fetch News.py` | Fetches relevant news articles via Google News RSS (per candidate) | `python "Day2 Fetch News.py"` |
 | `Day3 Sentiment Engine.py` | Runs per-candidate VADER sentiment on news articles, logs to CSV | `python "Day3 Sentiment Engine.py"` |
 | `Day4 Oracle Logic.py` | Combines per-candidate sentiment + price → BUY YES/BUY NO/HOLD signals | `python "Day4 Oracle Logic.py"` |
 | `Day5 Dashboard.py` | Full live dashboard (runs the entire pipeline) | `python -m streamlit run "Day5 Dashboard.py"` |
@@ -149,7 +149,7 @@ Delphi/
 │   ├── best_ai_model_march_2026_sentiment.csv    ← per-candidate sentiment history
 │   └── best_ai_model_march_2026_predictions.csv  ← oracle signal history
 ├── Day1 Fetch Polymarket.py                ← Polymarket API fetcher
-├── Day2 Fetch Reddit.py                    ← Google News RSS fetcher (per-candidate)
+├── Day2 Fetch News.py                      ← Google News RSS fetcher (per-candidate)
 ├── Day3 Sentiment Engine.py                ← per-candidate VADER sentiment analysis
 ├── Day4 Oracle Logic.py                    ← BUY YES/BUY NO/HOLD signal generation
 ├── Day5 Dashboard.py                       ← Streamlit live dashboard

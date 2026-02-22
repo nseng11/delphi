@@ -34,7 +34,7 @@ def _import_file(name, path):
 
 _base = os.path.dirname(os.path.abspath(__file__))
 _day1 = _import_file("day1", os.path.join(_base, "Day1 Fetch Polymarket.py"))
-_day3 = _import_file("day3", os.path.join(_base, "Day3 Sentiment Engine.py"))
+_day3 = _import_file("day3", os.path.join(_base, "Day3 Sentiment Engine.py"))  # Day3 re-exports Day2 functions
 _day4 = _import_file("day4", os.path.join(_base, "Day4 Oracle Logic.py"))
 
 fetch_market_by_slug             = _day1.fetch_market_by_slug
