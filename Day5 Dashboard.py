@@ -164,8 +164,8 @@ def fetch_live_data():
         for c in market_candidates
     }
 
-    # Day2/3: Reddit keyword search + per-candidate sentiment
-    # fetch_all_posts() uses Reddit's search endpoint (works from cloud IPs, no auth needed)
+    # Day2/3: Google News RSS + per-candidate sentiment
+    # fetch_all_posts() uses Google News RSS (works from cloud IPs, no auth needed)
     reddit_error = None
     try:
         all_posts = fetch_all_posts()
@@ -411,9 +411,9 @@ def main():
 
     # ── Debug info (always visible when posts = 0)
     if data.get("reddit_error"):
-        st.error(f"⚠️ Reddit fetch error: {data['reddit_error']}")
+        st.error(f"⚠️ News fetch error: {data['reddit_error']}")
     elif data.get("posts_fetched", 0) == 0:
-        st.warning("⚠️ Reddit returned 0 posts. Check the debug panel below.")
+        st.warning("⚠️ News fetch returned 0 articles. Check the debug panel below.")
 
     with st.expander("🔧 Debug info", expanded=(data.get("posts_fetched", 0) == 0)):
         st.json({
@@ -467,7 +467,7 @@ def main():
 
     with col4:
         fetched = data.get("posts_fetched", 0)
-        sub_txt = f"{fetched} fetched · {total_posts} relevant" if fetched != total_posts else "Reddit posts this cycle"
+        sub_txt = f"{fetched} fetched · {total_posts} relevant" if fetched != total_posts else "news articles this cycle"
         html = _kpi_card(
             "Posts Analyzed",
             str(total_posts),

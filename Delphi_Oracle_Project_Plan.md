@@ -28,7 +28,7 @@ Delphi Oracle is a prediction market sentiment analysis system that monitors soc
 - Polymarket event ID: `96022`
 - Resolution date: March 31, 2026 (based on lmarena.ai Chatbot Arena leaderboard score)
 - Frontrunner: Anthropic at ~63%, Google at ~22%, xAI/OpenAI at ~5-6%
-- Reddit sources: r/artificial, r/MachineLearning, r/ChatGPT, r/ClaudeAI, r/LocalLLaMA, r/PredictionMarkets, r/Polymarket
+- News source: Google News RSS (per-candidate keyword queries, no auth, works from cloud IPs)
 
 To switch to a different market: edit `active_market.py` (one line change).
 
@@ -39,7 +39,7 @@ To switch to a different market: edit `active_market.py` (one line change).
 - [x] Real-time prediction market data fetching (Polymarket API)
 - [x] Buy YES / Buy NO prices from live Polymarket order book
 - [x] Trading volume per candidate
-- [x] Social media sentiment data fetching (Reddit public API)
+- [x] News sentiment data fetching (Google News RSS — no auth, works from cloud IPs)
 - [x] Flexible market config system (switch markets in one line)
 - [x] **Per-candidate** sentiment scoring (not just market-wide aggregate)
 - [x] Compound keyword matching per candidate (prevents false positives)
@@ -62,11 +62,12 @@ To switch to a different market: edit `active_market.py` (one line change).
 | Web Framework | Streamlit | Web dashboard (chosen over Flask for speed) |
 | Visualization | Plotly | Interactive charts embedded in Streamlit |
 | Data Sources | Polymarket Gamma API | Prediction market prices |
-| | Reddit Public JSON API | Social sentiment data (no auth required) |
+| | Google News RSS | News sentiment data (no auth, no IP restrictions) |
 
 > **Decision log:**
 > - Twitter/X API ruled out — restrictive free tier
-> - Reddit public API chosen — no credentials required
+> - Reddit public API attempted — blocked by Reddit on cloud IPs (AWS/Streamlit Cloud); no workaround without paid API
+> - Google News RSS chosen — no credentials, no IP restrictions, aggregates tech news + blogs, ~177 articles/cycle
 > - Streamlit chosen over Flask for dashboard — faster to build, Flask planned for post-MVP port
 > - VADER chosen for sentiment — fast, no API key needed; LLM upgrade planned post-MVP
 
@@ -85,7 +86,7 @@ Delphi/
 │   ├── best_ai_model_march_2026_sentiment.csv    ← per-candidate sentiment history
 │   └── best_ai_model_march_2026_predictions.csv  ← oracle signal history
 ├── Day1 Fetch Polymarket.py       ✅ complete
-├── Day2 Fetch Reddit.py           ✅ complete
+├── Day2 Fetch Reddit.py           ✅ complete (Google News RSS fetcher)
 ├── Day3 Sentiment Engine.py       ✅ complete (per-candidate)
 ├── Day4 Oracle Logic.py           ✅ complete (BUY YES / BUY NO / HOLD per candidate)
 ├── Day5 Dashboard.py              ✅ complete (Streamlit)
@@ -105,7 +106,7 @@ Delphi/
 **Completed tasks:**
 - [x] Set up Python 3.14 development environment
 - [x] `Day1 Fetch Polymarket.py` — fetches live odds, buy YES/NO prices, and volume via Polymarket Gamma API
-- [x] `Day2 Fetch Reddit.py` — fetches relevant posts from configured subreddits via Reddit public JSON API
+- [x] `Day2 Fetch Reddit.py` — fetches relevant news articles via Google News RSS (per-candidate keyword queries; Reddit blocked on cloud IPs)
 - [x] Both scripts tested and verified producing live data
 - [x] Refactored to flexible market config system (`active_market.py` + `markets/` directory)
 - [x] Switched active market from Oscars to **Best AI Model — End of March 2026**
@@ -116,7 +117,7 @@ Delphi/
 **Deliverable achieved:** Two working scripts printing live data to terminal ✅
 
 **Key decisions made:**
-- Used Reddit public API (no credentials) instead of PRAW — avoids API registration friction
+- Used Google News RSS instead of Reddit — Reddit's public API blocks cloud server IPs (403); Google News has no IP restrictions and no auth requirements
 - Switched target market from Oscars 2026 to Best AI Model March 2026 (better fit for ongoing sentiment analysis)
 - Built flexible market config system so any Polymarket market can be targeted by changing one line
 - Buy YES = `bestAsk` from Polymarket order book; Buy NO = `1 - bestAsk`
@@ -248,7 +249,7 @@ Delphi/
 
 | Challenge | Mitigation Strategy |
 |---|---|
-| API rate limits | Reddit public API used (no auth, generous limits); Polymarket has no rate limits for read operations |
+| API rate limits | Google News RSS used (no auth, generous limits); Polymarket has no rate limits for read operations |
 | Inaccurate predictions | Expected for MVP - focus on demonstrating concept, not profitability |
 | Time constraints | Prioritize core features; defer polish if needed |
 | Technical bugs | Build incrementally; test each component before integration |
@@ -312,7 +313,7 @@ Delphi/
 
 - **Multi-model consensus** — Run 2-3 LLMs and require agreement before acting on sentiment
 - **Auto-generate market configs** — Enter any Polymarket URL; LLM generates the `markets/[slug].py` config automatically (architecture already designed)
-- **Additional data sources** — NewsAPI.org, Twitter/X (if API access obtained)
+- **Additional data sources** — Reddit (if IP restrictions lifted), Twitter/X (if API access obtained)
 - **Flask port** — Port dashboard from Streamlit to Flask for more customisation
 - **Multi-market dashboard** — Monitor several markets simultaneously; config system already supports this
 - **Real-time alerts** — Email/SMS notifications for high-confidence signals

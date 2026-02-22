@@ -10,7 +10,7 @@
 
 ## What is Delphi Oracle?
 
-Delphi Oracle monitors Reddit sentiment around a Polymarket prediction market and compares it to the current implied odds. When social sentiment for a specific candidate diverges significantly from their market price, the Oracle flags it as a **BUY YES** (underpriced), **BUY NO** (overpriced), or **HOLD** signal.
+Delphi Oracle monitors news sentiment around a Polymarket prediction market and compares it to the current implied odds. When sentiment for a specific candidate diverges significantly from their market price, the Oracle flags it as a **BUY YES** (underpriced), **BUY NO** (overpriced), or **HOLD** signal.
 
 Sentiment is scored **per candidate** — not as a single market-wide aggregate. This means the system can simultaneously flag Google as underpriced while flagging Anthropic as overpriced within the same market.
 
@@ -21,17 +21,17 @@ Named after the Oracle of Delphi — it doesn't guarantee the future, but it see
 ## How It Works
 
 ```
-┌─────────────────┐     ┌──────────────────┐
-│  Polymarket API  │     │   Reddit API      │
-│  (live odds +    │     │  (public, no key) │
-│   buy prices)    │     │                   │
-└────────┬─────────┘     └────────┬──────────┘
+┌─────────────────┐     ┌──────────────────────┐
+│  Polymarket API  │     │   Google News RSS     │
+│  (live odds +    │     │  (no key, no IP block)│
+│   buy prices)    │     │  tech news · blogs    │
+└────────┬─────────┘     └────────┬─────────────┘
          │                        │
          ▼                        ▼
 ┌─────────────────────────────────────────────┐
 │           Day3 Sentiment Engine              │
 │   Per-candidate VADER scoring                │
-│   Upvote-weighted · min post floor           │
+│   Article-weighted · min article floor       │
 │   Output: score per candidate (0.0 – 1.0)   │
 └───────────────────────┬─────────────────────┘
                         │
@@ -60,7 +60,7 @@ Named after the Oracle of Delphi — it doesn't guarantee the future, but it see
 Key panels:
 - **Oracle Signals** — per-candidate BUY YES / BUY NO / HOLD with confidence
 - **Live Odds** — Polymarket probability bar chart with buy YES/NO prices and volume
-- **Sentiment Table** — per-candidate Reddit sentiment scores and post counts
+- **Sentiment Table** — per-candidate sentiment scores and article counts
 - **Historical Trends** — sentiment + price over time with signal markers
 - **Prediction Log** — timestamped record of every oracle signal
 
@@ -98,8 +98,8 @@ The dashboard opens automatically at **http://localhost:8501**
 | Script | What it does | Run command |
 |---|---|---|
 | `Day1 Fetch Polymarket.py` | Fetches live odds, buy YES/NO prices, and volume from Polymarket | `python "Day1 Fetch Polymarket.py"` |
-| `Day2 Fetch Reddit.py` | Scrapes relevant Reddit posts from configured subreddits | `python "Day2 Fetch Reddit.py"` |
-| `Day3 Sentiment Engine.py` | Runs per-candidate VADER sentiment on Reddit posts, logs to CSV | `python "Day3 Sentiment Engine.py"` |
+| `Day2 Fetch Reddit.py` | Fetches relevant news articles via Google News RSS (per candidate) | `python "Day2 Fetch Reddit.py"` |
+| `Day3 Sentiment Engine.py` | Runs per-candidate VADER sentiment on news articles, logs to CSV | `python "Day3 Sentiment Engine.py"` |
 | `Day4 Oracle Logic.py` | Combines per-candidate sentiment + price → BUY YES/BUY NO/HOLD signals | `python "Day4 Oracle Logic.py"` |
 | `Day5 Dashboard.py` | Full live dashboard (runs the entire pipeline) | `python -m streamlit run "Day5 Dashboard.py"` |
 
@@ -123,12 +123,12 @@ Create a new market config by copying an existing file from `markets/` and filli
 | `event_id` | Polymarket event ID (fallback if slug query returns empty) |
 | `data_prefix` | Prefix for CSV filenames in `data/` |
 | `min_volume` | Hide candidates with less than this total trading volume (e.g. `1.0`) |
-| `min_signal_posts` | Minimum Reddit posts required before a BUY/SELL signal fires (e.g. `5`) |
+| `min_signal_posts` | Minimum articles required before a BUY/SELL signal fires (e.g. `5`) |
 | `question_parsing` | `strip_prefix` / `strip_suffix` to extract candidate names from API question strings |
-| `subreddits_new` | Subreddits to scrape with `/new` sort |
-| `subreddits_hot` | Subreddits to scrape with `/hot` sort |
-| `candidates` | Dict mapping each candidate name to their specific Reddit keywords |
-| `keywords` | Flat list (derived from `candidates`) used by Day2 for broad post fetching |
+| `subreddits_new` | Subreddits (kept for config compatibility, used as fallback search terms) |
+| `subreddits_hot` | Subreddits (kept for config compatibility, used as fallback search terms) |
+| `candidates` | Dict mapping each candidate name to their specific search keywords |
+| `keywords` | Flat list (derived from `candidates`) used by Day2 for broad article fetching |
 | `sentiment.bullish_threshold` | Normalized score above which sentiment is bullish (e.g. `0.60`) |
 | `sentiment.bearish_threshold` | Normalized score below which sentiment is bearish (e.g. `0.40`) |
 | `oracle.price_low_cutoff` | BUY YES signal if price is below this (e.g. `0.20` = 20%) |
@@ -149,7 +149,7 @@ Delphi/
 │   ├── best_ai_model_march_2026_sentiment.csv    ← per-candidate sentiment history
 │   └── best_ai_model_march_2026_predictions.csv  ← oracle signal history
 ├── Day1 Fetch Polymarket.py                ← Polymarket API fetcher
-├── Day2 Fetch Reddit.py                    ← Reddit public API scraper
+├── Day2 Fetch Reddit.py                    ← Google News RSS fetcher (per-candidate)
 ├── Day3 Sentiment Engine.py                ← per-candidate VADER sentiment analysis
 ├── Day4 Oracle Logic.py                    ← BUY YES/BUY NO/HOLD signal generation
 ├── Day5 Dashboard.py                       ← Streamlit live dashboard
@@ -161,13 +161,13 @@ Delphi/
 
 ## Signal Logic
 
-The Oracle compares **per-candidate Reddit sentiment** against that **candidate's Polymarket price**:
+The Oracle compares **per-candidate news sentiment** against that **candidate's Polymarket price**:
 
 | Condition | Signal | Meaning |
 |---|---|---|
-| Sentiment ≥ bullish_threshold **AND** Price < price_low_cutoff **AND** posts ≥ min_signal_posts | 📈 **BUY YES** | Reddit is bullish but market hasn't priced it in — candidate may be underpriced |
-| Sentiment ≤ bearish_threshold **AND** Price > price_high_cutoff **AND** posts ≥ min_signal_posts | 📉 **BUY NO** | Reddit is bearish but market is still pricing them high — candidate may be overpriced |
-| posts < min_signal_posts | ⚠️ **HOLD** | Not enough Reddit data to trust the signal |
+| Sentiment ≥ bullish_threshold **AND** Price < price_low_cutoff **AND** articles ≥ min_signal_posts | 📈 **BUY YES** | News is bullish but market hasn't priced it in — candidate may be underpriced |
+| Sentiment ≤ bearish_threshold **AND** Price > price_high_cutoff **AND** articles ≥ min_signal_posts | 📉 **BUY NO** | News is bearish but market is still pricing them high — candidate may be overpriced |
+| articles < min_signal_posts | ⚠️ **HOLD** | Not enough news data to trust the signal |
 | All other conditions | ➡️ **HOLD** | No significant divergence detected |
 
 **Confidence** measures signal strength:
@@ -184,9 +184,9 @@ Two mechanisms prevent low-quality signals from firing:
 
 **1. `min_volume` (Day1)** — candidates with no meaningful trading activity are hidden from the display entirely. Set in the market config (e.g. `"min_volume": 1.0`).
 
-**2. `min_signal_posts` (Day4)** — a BUY YES or BUY NO signal only fires if the candidate had at least this many qualifying Reddit posts in the current fetch cycle. Prevents a single viral post from triggering a trade signal. Set in the market config (e.g. `"min_signal_posts": 5`).
+**2. `min_signal_posts` (Day4)** — a BUY YES or BUY NO signal only fires if the candidate had at least this many qualifying news articles in the current fetch cycle. Prevents a single article from triggering a trade signal. Set in the market config (e.g. `"min_signal_posts": 5`).
 
-**3. Specific candidate keywords** — each candidate has its own keyword list, using compound phrases (e.g. `"moonshot ai"` instead of `"moonshot"`, `"baidu ernie"` instead of `"ernie"`) to prevent generic English words from contaminating sentiment scores.
+**3. Specific candidate keywords** — each candidate has its own keyword list, using compound phrases (e.g. `"moonshot ai"` instead of `"moonshot"`, `"baidu ernie"` instead of `"ernie"`) to prevent generic English words from contaminating sentiment scores. Each candidate's Google News query uses their top 4 keywords.
 
 ---
 
@@ -194,8 +194,8 @@ Two mechanisms prevent low-quality signals from firing:
 
 | Metric | What it means |
 |---|---|
-| **Sentiment Score** | Upvote-weighted VADER score per candidate, normalised to 0–1. `0.5` = neutral. |
-| **Posts Analyzed** | Number of Reddit posts that matched this candidate's keywords. Low numbers = less reliable signal. |
+| **Sentiment Score** | VADER sentiment score per candidate averaged across matching articles, normalised to 0–1. `0.5` = neutral. |
+| **Posts Analyzed** | Number of news articles that matched this candidate's keywords. Low numbers = less reliable signal. |
 | **Market Price** | The current Polymarket implied probability (e.g. `63.3%` = $0.633 to buy a Yes share). |
 | **Buy YES price** | Cost per share to buy a Yes position (bestAsk from Polymarket order book). |
 | **Buy NO price** | Cost per share to buy a No position (`1 - bestAsk`). |
@@ -209,13 +209,14 @@ Two mechanisms prevent low-quality signals from firing:
 - [x] Real-time prediction market data fetching (Polymarket Gamma API)
 - [x] Buy YES / Buy NO prices from live order book
 - [x] Trading volume per candidate
-- [x] Per-candidate Reddit sentiment (not just market-wide)
-- [x] Signal quality floor (min posts before signal fires)
+- [x] Per-candidate news sentiment (not just market-wide)
+- [x] Signal quality floor (min articles before signal fires)
 - [x] Compound keyword matching to prevent false positives
+- [x] Google News RSS as data source (works from Streamlit Cloud, no auth required)
 - [ ] **LLM sentiment layer** — replace VADER with Claude for relevance filtering + better sarcasm/irony detection
 - [ ] **Multi-model consensus** — require 2–3 LLMs to agree before generating a signal
 - [ ] **Auto-generate market configs** — paste a Polymarket URL, LLM writes the config file automatically
-- [ ] **Additional data sources** — NewsAPI, Twitter/X
+- [ ] **Additional data sources** — Twitter/X, Reddit (when accessible)
 - [ ] **Flask port** — port dashboard from Streamlit to Flask for more control
 - [ ] **Real-time alerts** — email/SMS for high-confidence signals
 - [ ] **VPS deployment** — Docker + docker-compose on Hostinger KVM2
