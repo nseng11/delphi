@@ -1,12 +1,12 @@
 """
-Delphi Oracle - Day 3: Sentiment Analysis Engine
-Source: Reddit posts fetched live via Day2 pipeline
+Delphi - Day 3: Sentiment Analysis Engine
+Source: News articles fetched live via Day2 pipeline (Google News RSS)
 Method: VADER (baseline) with LLM-ready architecture
 
 Scoring (per candidate):
-  - All Reddit posts are fetched once using the broad keyword list
-  - Each candidate's posts are filtered by that candidate's specific keywords
-  - Posts scored -1 to +1 by VADER, weighted by upvotes
+  - All articles are fetched once using the broad keyword list
+  - Each candidate's articles are filtered by that candidate's specific keywords
+  - Articles scored -1 to +1 by VADER, weighted by score
   - Aggregate score mapped to: bearish / neutral / bullish
   - Results logged to data/[prefix]_sentiment.csv
 
@@ -58,7 +58,7 @@ _analyzer = SentimentIntensityAnalyzer()
 
 def analyze_post_sentiment(post: dict) -> dict:
     """
-    Score a single Reddit post for sentiment.
+    Score a single news article for sentiment.
 
     LLM upgrade point: replace or wrap this function to add Claude/GPT analysis.
 
@@ -205,7 +205,7 @@ def log_to_csv(all_results: dict) -> None:
 def display_results(all_results: dict) -> None:
     """Print per-candidate sentiment table."""
     print("\n" + "=" * 75)
-    print("🔮 DELPHI ORACLE - SENTIMENT ANALYSIS (per candidate)")
+    print("🔮 DELPHI - SENTIMENT ANALYSIS (per candidate)")
     print("=" * 75)
     print(f"🎯 Market : {MARKET_CONFIG['name']}")
     print(f"🕐 Time   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -261,23 +261,19 @@ def display_results(all_results: dict) -> None:
 
 def main():
     print("\n" + "🔮" * 35)
-    print("        DELPHI ORACLE - SENTIMENT ENGINE")
+    print("        DELPHI - SENTIMENT ENGINE")
     print("              (VADER Baseline · per-candidate)")
     print("🔮" * 35 + "\n")
 
-    # Step 1: Fetch Reddit posts (broad net via flat keywords)
-    print("📡 Fetching Reddit posts...\n")
-    all_posts = []
-    for sub in SUBREDDITS_NEW:
-        all_posts.extend(fetch_subreddit_posts(sub, sort="new"))
-    for sub in SUBREDDITS_HOT:
-        all_posts.extend(fetch_subreddit_posts(sub, sort="hot"))
+    # Step 1: Fetch news articles (Google News RSS via Day2)
+    print("📡 Fetching news articles...\n")
+    all_posts = fetch_all_posts()
 
     relevant_posts = [p for p in all_posts if is_relevant(p)]
-    print(f"\n📥 {len(all_posts)} posts fetched  |  {len(relevant_posts)} relevant\n")
+    print(f"\n📥 {len(all_posts)} articles fetched  |  {len(relevant_posts)} relevant\n")
 
     if not relevant_posts:
-        print("⚠️  No relevant posts found. Cannot compute sentiment.")
+        print("⚠️  No relevant articles found. Cannot compute sentiment.")
         return
 
     # Step 2: Score each candidate

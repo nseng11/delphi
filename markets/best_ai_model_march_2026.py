@@ -1,5 +1,5 @@
 # ============================================================
-# Delphi Oracle - Market Config: Best AI Model End of March 2026
+# Delphi - Market Config: Best AI Model End of March 2026
 # ============================================================
 # Copy this file to create a new market config.
 # Edit all values below, then point active_market.py at it.
@@ -27,9 +27,9 @@ MARKET_CONFIG = {
         "strip_suffix": " have the best AI model at the end of March 2026?",
     },
 
-    # --- Reddit config ---
-    # subreddits_new: high-volume AI discourse subs (fetched by recency)
-    # subreddits_hot: prediction market subs (fetched by hot/trending)
+    # --- News search config (subreddits kept for compatibility shim in Day2) ---
+    # subreddits_new: high-volume AI discourse subs (used as Google News search scope)
+    # subreddits_hot: prediction market subs (used as Google News search scope)
     "subreddits_new": [
         "artificial",
         "MachineLearning",
@@ -131,7 +131,7 @@ MARKET_CONFIG = {
         ],
     },
 
-    # Flat keyword list derived from candidates above — used by Day2 for broad Reddit fetching.
+    # Flat keyword list derived from candidates above — used by Day2 for broad news fetching.
     # Keep this in sync with the candidates dict.
     "keywords": [
         "anthropic", "claude opus", "claude sonnet", "claude 4",
@@ -152,8 +152,8 @@ MARKET_CONFIG = {
     ],
 
     # --- Signal quality floor ---
-    # Minimum number of Reddit posts required before a BUY YES / BUY NO signal fires.
-    # Prevents low-data candidates (1-2 posts) from generating misleading signals.
+    # Minimum number of news articles required before a BUY YES / BUY NO signal fires.
+    # Prevents low-data candidates (1-2 articles) from generating misleading signals.
     # Candidates below this threshold show their sentiment score but output HOLD.
     "min_signal_posts": 5,
 
@@ -170,9 +170,9 @@ MARKET_CONFIG = {
     # --- Oracle thresholds (used by Day4 Oracle Logic) ---
     # Current distribution (Feb 2026): Anthropic ~63%, Google ~22%, xAI/OpenAI ~5%.
     # BUY YES if: sentiment bullish AND price < 20%
-    #   → targets realistic challengers (Google and below) that Reddit thinks are underpriced
+    #   → targets realistic challengers (Google and below) that news sentiment thinks are underpriced
     # BUY NO if: sentiment bearish AND price > 55%
-    #   → targets Anthropic if Reddit sentiment turns against it
+    #   → targets Anthropic if news sentiment turns against it
     # Signals on sub-1% longshots (Moonshot, Alibaba, etc.) are filtered out by the
     # price_low_cutoff — they'll never fire BUY YES unless they trade above 0% and below 20%.
     "oracle": {

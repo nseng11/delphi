@@ -1,5 +1,5 @@
 """
-Delphi Oracle - Day 1: Polymarket Data Fetcher
+Delphi - Day 1: Polymarket Data Fetcher
 Fetches live market odds for the active market config.
 
 Supports two Polymarket market structures:
@@ -177,7 +177,7 @@ def parse_market_data(event_data, min_probability=0.0):
         return
 
     print("=" * 70)
-    print("📊 DELPHI ORACLE - MARKET DATA")
+    print("📊 DELPHI - MARKET DATA")
     print("=" * 70)
     print(f"\n🎯 Market  : {MARKET_CONFIG['name']}")
     print(f"📅 Retrieved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -234,7 +234,7 @@ def parse_market_data(event_data, min_probability=0.0):
 
 def main():
     print("\n" + "🔮" * 35)
-    print("        DELPHI ORACLE - POLYMARKET DATA FETCHER")
+    print("        DELPHI - POLYMARKET DATA FETCHER")
     print("🔮" * 35 + "\n")
 
     event_data = fetch_market_by_slug(MARKET_CONFIG["slug"])

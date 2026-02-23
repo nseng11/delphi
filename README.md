@@ -1,4 +1,4 @@
-# 🔮 Delphi Oracle
+# 🔮 Delphi
 
 > **Prediction market sentiment analysis — identify mispricings before the market corrects.**
 
@@ -8,13 +8,13 @@
 
 ---
 
-## What is Delphi Oracle?
+## What is Delphi?
 
-Delphi Oracle monitors news sentiment around a Polymarket prediction market and compares it to the current implied odds. When sentiment for a specific candidate diverges significantly from their market price, the Oracle flags it as a **BUY YES** (underpriced), **BUY NO** (overpriced), or **HOLD** signal.
+Delphi monitors news sentiment around a Polymarket prediction market and compares it to the current implied odds. When sentiment for a specific candidate diverges significantly from their market price, Delphi flags it as a **BUY YES** (underpriced), **BUY NO** (overpriced), or **HOLD** signal.
 
 Sentiment is scored **per candidate** — not as a single market-wide aggregate. This means the system can simultaneously flag Google as underpriced while flagging Anthropic as overpriced within the same market.
 
-Named after the Oracle of Delphi — it doesn't guarantee the future, but it sees patterns others miss.
+Named after the Oracle of Delphi — Delphi doesn't guarantee the future, but it sees patterns others miss.
 
 ---
 
@@ -58,11 +58,11 @@ Named after the Oracle of Delphi — it doesn't guarantee the future, but it see
 > 📸 *Screenshot coming soon — run the dashboard locally to see it in action.*
 
 Key panels:
-- **Oracle Signals** — per-candidate BUY YES / BUY NO / HOLD with confidence
+- **Signals** — per-candidate BUY YES / BUY NO / HOLD with confidence
 - **Live Odds** — Polymarket probability bar chart with buy YES/NO prices and volume
 - **Sentiment Table** — per-candidate sentiment scores and article counts
 - **Historical Trends** — sentiment + price over time with signal markers
-- **Prediction Log** — timestamped record of every oracle signal
+- **Prediction Log** — timestamped record of every signal
 
 ---
 
@@ -71,8 +71,8 @@ Key panels:
 ### 1. Clone or download the project
 
 ```bash
-git clone https://github.com/your-username/delphi-oracle.git
-cd delphi-oracle
+git clone https://github.com/your-username/delphi.git
+cd delphi
 ```
 
 ### 2. Install dependencies
@@ -161,7 +161,7 @@ Delphi/
 
 ## Signal Logic
 
-The Oracle compares **per-candidate news sentiment** against that **candidate's Polymarket price**:
+Delphi compares **per-candidate news sentiment** against that **candidate's Polymarket price**:
 
 | Condition | Signal | Meaning |
 |---|---|---|

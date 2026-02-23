@@ -1,4 +1,4 @@
-# DELPHI ORACLE
+# DELPHI
 ## Prediction Market Sentiment Analysis System
 
 **2-Week MVP Development Plan** — *Last updated: February 22, 2026*
@@ -17,7 +17,7 @@
 
 ## Project Overview
 
-Delphi Oracle is a prediction market sentiment analysis system that monitors social media sentiment and compares it to current prediction market prices to identify potential mispricings. Named after the Oracle of Delphi, this system aims to 'foresee' market movements before they occur.
+Delphi is a prediction market sentiment analysis system that monitors news sentiment and compares it to current prediction market prices to identify potential mispricings. Named after the Oracle of Delphi, it aims to 'foresee' market movements before they occur.
 
 ---
 

@@ -1,5 +1,5 @@
 # ============================================================
-# Delphi Oracle - Market Config: Oscars 2026 Best Picture
+# Delphi - Market Config: Oscars 2026 Best Picture
 # ============================================================
 # Copy this file to create a new market config.
 # Edit all values below, then point active_market.py at it.
@@ -24,7 +24,7 @@ MARKET_CONFIG = {
         "strip_suffix": " win Best Picture at the 98th Academy Awards?",
     },
 
-    # --- Reddit config ---
+    # --- News search config (subreddits kept for compatibility shim in Day2) ---
     "subreddits_new": ["movies", "Oscars", "entertainment", "criterion"],
     "subreddits_hot": ["PredictionMarkets", "Polymarket"],
 

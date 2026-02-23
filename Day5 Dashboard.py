@@ -1,6 +1,6 @@
 """
-Delphi Oracle - Day 5: Streamlit Dashboard
-Live web interface combining Polymarket prices, Reddit sentiment, and Oracle signals.
+Delphi - Day 5: Streamlit Dashboard
+Live web interface combining Polymarket prices, news sentiment, and oracle signals.
 
 Run with:
     python -m streamlit run "Day5 Dashboard.py"
@@ -57,7 +57,7 @@ REFRESH_SECONDS   = 60
 # ── Page config ──────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="Delphi Oracle",
+    page_title="Delphi",
     page_icon="🔮",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -396,7 +396,7 @@ def main():
     # ── Header
     st.markdown(f"""
     <div class="delphi-logo">
-        <span class="delphi-wordmark">🔮 Delphi Oracle</span>
+        <span class="delphi-wordmark">🔮 Delphi</span>
         <span class="market-badge">{MARKET_CONFIG['name']}</span>
     </div>
     <p class="delphi-subtitle">Prediction market sentiment intelligence · Live analysis</p>
@@ -518,7 +518,7 @@ def main():
     predictions_df = load_prediction_history()
 
     if sentiment_df.empty and predictions_df.empty:
-        st.info("No historical data yet — run the Oracle a few times to build history.")
+        st.info("No historical data yet — run Delphi a few times to build history.")
     else:
         candidate_names = []
         if not predictions_df.empty and "candidate" in predictions_df.columns:

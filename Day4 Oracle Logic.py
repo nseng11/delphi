@@ -1,6 +1,6 @@
 """
-Delphi Oracle - Day 4: Oracle Logic
-Combines live Polymarket prices + per-candidate Reddit sentiment to generate signals.
+Delphi - Day 4: Oracle Logic
+Combines live Polymarket prices + per-candidate news sentiment to generate signals.
 
 Signal rules (thresholds set in markets/[config].py):
   BUY YES  — sentiment bullish AND price < price_low_cutoff
@@ -37,11 +37,9 @@ _day3 = _import_file("day3", os.path.join(_base, "Day3 Sentiment Engine.py"))
 
 fetch_market_by_slug           = _day1.fetch_market_by_slug
 get_candidates                 = _day1.get_candidates
-fetch_subreddit_posts          = _day3.fetch_subreddit_posts
-is_relevant                    = _day3.is_relevant
+fetch_all_posts                  = _day3.fetch_all_posts
+is_relevant                      = _day3.is_relevant
 compute_all_candidates_sentiment = _day3.compute_all_candidates_sentiment
-SUBREDDITS_NEW                 = _day3.SUBREDDITS_NEW
-SUBREDDITS_HOT                 = _day3.SUBREDDITS_HOT
 
 
 # ── Config ───────────────────────────────────────────────────────────────────────
@@ -64,7 +62,7 @@ def generate_signal(sentiment_score: float | None, price: float, posts_analyzed:
     """
     Generate BUY YES / BUY NO / HOLD signal for one candidate.
 
-    sentiment_score:  normalized 0-1 (None = no Reddit data for this candidate)
+    sentiment_score:  normalized 0-1 (None = no news data for this candidate)
     price:            current market probability as 0-1 (e.g. 0.63 = 63%)
     posts_analyzed:   number of qualifying posts used to compute sentiment
     """
@@ -73,7 +71,7 @@ def generate_signal(sentiment_score: float | None, price: float, posts_analyzed:
             "signal":     "HOLD",
             "action":     "—",
             "confidence": 0.0,
-            "reasoning":  "No Reddit data found for this candidate.",
+            "reasoning":  "No news data found for this candidate.",
         }
 
     if posts_analyzed < MIN_SIGNAL_POSTS:
@@ -87,7 +85,7 @@ def generate_signal(sentiment_score: float | None, price: float, posts_analyzed:
             ),
         }
 
-    # BUY YES: Reddit is bullish but price hasn't caught up
+    # BUY YES: news is bullish but price hasn't caught up
     if sentiment_score >= BULLISH_THRESHOLD and price < PRICE_LOW_CUTOFF:
         confidence = round(
             (sentiment_score - BULLISH_THRESHOLD) * 2 + (PRICE_LOW_CUTOFF - price) * 2, 3
@@ -102,7 +100,7 @@ def generate_signal(sentiment_score: float | None, price: float, posts_analyzed:
             ),
         }
 
-    # BUY NO: Reddit is bearish but price is still high
+    # BUY NO: news is bearish but price is still high
     if sentiment_score <= BEARISH_THRESHOLD and price > PRICE_HIGH_CUTOFF:
         confidence = round(
             (BEARISH_THRESHOLD - sentiment_score) * 2 + (price - PRICE_HIGH_CUTOFF) * 2, 3
@@ -176,7 +174,7 @@ def load_past_predictions() -> list:
 
 def display_signals(candidate_signals: list, timestamp: str) -> None:
     print("\n" + "=" * 85)
-    print("🔮 DELPHI ORACLE - SIGNALS")
+    print("🔮 DELPHI - SIGNALS")
     print("=" * 85)
     print(f"🎯 Market : {MARKET_CONFIG['name']}")
     print(f"🕐 Time   : {timestamp}")
@@ -240,7 +238,7 @@ def display_history(past_predictions: list) -> None:
 
 def main():
     print("\n" + "🔮" * 35)
-    print("        DELPHI ORACLE - ORACLE LOGIC ENGINE")
+    print("        DELPHI - ORACLE ENGINE")
     print("              (Sentiment × Market = Signal · per-candidate)")
     print("🔮" * 35 + "\n")
 
@@ -265,16 +263,12 @@ def main():
     }
     print(f"  ✅ {len(market_candidates)} candidates fetched\n")
 
-    # Step 2: Fetch Reddit + compute per-candidate sentiment
-    print("📡 Fetching Reddit sentiment...")
-    all_posts = []
-    for sub in SUBREDDITS_NEW:
-        all_posts.extend(fetch_subreddit_posts(sub, sort="new"))
-    for sub in SUBREDDITS_HOT:
-        all_posts.extend(fetch_subreddit_posts(sub, sort="hot"))
+    # Step 2: Fetch news + compute per-candidate sentiment
+    print("📡 Fetching news sentiment...")
+    all_posts = fetch_all_posts()   # Google News RSS via Day3
 
     relevant = [p for p in all_posts if is_relevant(p)]
-    print(f"  ✅ {len(relevant)} relevant posts found\n")
+    print(f"  ✅ {len(relevant)} relevant articles found\n")
 
     sentiment_results = compute_all_candidates_sentiment(relevant)
 
@@ -314,7 +308,7 @@ def main():
     log_predictions(timestamp, candidate_signals)
 
     actionable_count = sum(1 for r in candidate_signals if r["signal"]["signal"] != "HOLD")
-    print(f"\n✅ Oracle complete!  {actionable_count} actionable signal(s) this run.\n")
+    print(f"\n✅ Delphi complete!  {actionable_count} actionable signal(s) this run.\n")
 
 
 if __name__ == "__main__":

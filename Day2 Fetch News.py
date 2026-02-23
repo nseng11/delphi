@@ -1,5 +1,5 @@
 """
-Delphi Oracle - Day 2: News & Social Sentiment Data Fetcher
+Delphi - Day 2: News & Social Sentiment Data Fetcher
 Source: Google News RSS (no credentials, no IP restrictions, free)
 
 Strategy:
@@ -22,7 +22,7 @@ from active_market import MARKET_CONFIG
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-HEADERS        = {"User-Agent": "DelphiOracle/1.0 (sentiment research project)"}
+HEADERS        = {"User-Agent": "Delphi/1.0 (sentiment research project)"}
 KEYWORDS       = MARKET_CONFIG["keywords"]
 CANDIDATES     = MARKET_CONFIG.get("candidates", {})
 MAX_PER_QUERY  = 20    # articles per keyword batch (Google News max is ~100)
@@ -164,7 +164,7 @@ def display_post(rank: int, post: dict) -> None:
 
 def display_results(relevant_posts: list) -> None:
     print("\n" + "=" * 70)
-    print("📊 DELPHI ORACLE - NEWS DATA FEED")
+    print("📊 DELPHI - NEWS DATA FEED")
     print("=" * 70)
     print(f"🕐 Retrieved : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🎯 Topic     : {MARKET_CONFIG['name']}")
@@ -190,7 +190,7 @@ def display_results(relevant_posts: list) -> None:
 
 def main():
     print("\n" + "🔮" * 35)
-    print("        DELPHI ORACLE - NEWS DATA FETCHER")
+    print("        DELPHI - NEWS DATA FETCHER")
     print("            (Google News RSS · No Auth Required)")
     print("🔮" * 35 + "\n")
 

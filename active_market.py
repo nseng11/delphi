@@ -1,5 +1,5 @@
 # ============================================================
-# DELPHI ORACLE - Active Market Selector
+# DELPHI - Active Market Selector
 # ============================================================
 # This is the ONLY file you need to change to switch markets.
 # Change the import line below to point to a different market.
